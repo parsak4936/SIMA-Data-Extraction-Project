@@ -1,0 +1,5 @@
+# Ignore the virtual environment
+env_sima/
+
+# Ignore Jupyter Notebook background files (standard practice)
+.ipynb_checkpoints/
