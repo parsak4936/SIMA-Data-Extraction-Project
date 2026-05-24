@@ -1,6 +1,10 @@
 import urllib.parse
 import time
+import logging
+import traceback
+import requests
 
+logger = logging.getLogger(__name__)
 
 def search_openalex_author(
     session,
@@ -13,7 +17,6 @@ def search_openalex_author(
     extract_email_domain
 ):
     email_domain = extract_email_domain(email)
-
     search_variations = []
 
     if first_name and last_name:
@@ -31,17 +34,15 @@ def search_openalex_author(
     best_score = -1
 
     for variation in search_variations:
-        encoded = urllib.parse.quote(variation)
-
-        url = (
-            "https://api.openalex.org/authors"
-            f"?search={encoded}&per-page=10"
-        )
+        encoded = urllib.parse.quote(variation.strip())
+        url = f"https://api.openalex.org/authors?search={encoded}&per-page=10"
 
         try:
-            r = session.get(url, headers=headers, timeout=15)
+            # Increased timeout to 30 seconds to account for slow connections
+            r = session.get(url, headers=headers, timeout=30)
 
             if r.status_code != 200:
+                logger.warning(f"API Warning: Server returned {r.status_code} for '{variation}'")
                 continue
 
             results = r.json().get("results", [])
@@ -59,7 +60,17 @@ def search_openalex_author(
                     best_score = score
                     best_candidate = candidate
 
-        except Exception:
+        except requests.exceptions.Timeout:
+            logger.error(f"TIMEOUT searching '{variation}' (>30s) - skipping")
+            time.sleep(2)
+            continue
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error searching '{variation}': {e}")
+            time.sleep(2)
+            continue
+        except Exception as e:
+            logger.error(f"API Error searching '{variation}': {e}")
+            logger.debug(traceback.format_exc())
             time.sleep(1)
             continue
 
@@ -82,6 +93,8 @@ def get_author_works(
 ):
     all_works = []
     cursor = "*"
+    max_retries = 3
+    retry_count = 0
 
     while cursor:
         url = (
@@ -92,9 +105,19 @@ def get_author_works(
         )
 
         try:
-            r = session.get(url, headers=headers, timeout=20)
+            # Increased timeout to 30 seconds
+            r = session.get(url, headers=headers, timeout=30)
 
             if r.status_code != 200:
+                logger.warning(f"API Warning: Server returned {r.status_code} when fetching works for {author_id}")
+                if r.status_code == 429:  # Rate limited
+                    logger.warning("Rate limited! Backing off for 5 seconds...")
+                    time.sleep(5)
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        logger.error("Max retries exceeded. Giving up on this author.")
+                        break
+                    continue
                 break
 
             data = r.json()
@@ -130,9 +153,31 @@ def get_author_works(
                 })
 
             cursor = data.get("meta", {}).get("next_cursor")
-            time.sleep(0.3)
+            logger.info(f"Fetching works page cursor={cursor}")
+            logger.info(f"Received {len(results)} works")
+            
+            # Increased delay between paginated requests
+            time.sleep(0.5)
+            retry_count = 0  # Reset retry count on success
 
-        except Exception:
+        except requests.exceptions.Timeout:
+            logger.error(f"TIMEOUT fetching works for {author_id} (>30s)")
+            retry_count += 1
+            if retry_count > max_retries:
+                logger.error("Max retries exceeded. Giving up on this author.")
+                break
+            time.sleep(2)
+            continue
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error for {author_id}: {e}")
+            retry_count += 1
+            if retry_count > max_retries:
+                break
+            time.sleep(2)
+            continue
+        except Exception as e:
+            logger.error(f"Error extracting works for {author_id}: {e}")
+            logger.debug(traceback.format_exc())
             break
 
     return all_works

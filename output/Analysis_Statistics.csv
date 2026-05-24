@@ -1,0 +1,11 @@
+Metric,Value
+Total Authors in Main Dataset,1739
+Authors with Papers Found,1191
+Authors with 0 Papers,21
+Total Paper Entries (Raw),41870
+Unique Papers (Final),28786
+Duplicate Entries Removed,13084
+Deduplication Rate,31.2%
+Average Papers per Author,24.17
+Top Author Paper Count,432
+Authors with 10+ Papers,537
