@@ -1,16 +1,3 @@
-# OpenAlex Author Paper Extraction - Updated Guide
-
-## 📋 What's Been Improved
-
-### ✅ Fixed Issues
-1. **Graceful Interruption (Ctrl+C)** - Script now saves progress safely when interrupted
-2. **Timeout Protection** - If no response for 1 minute, script saves and exits automatically
-3. **Progress Reset Mechanism** - New `--reset-progress` flag to start fresh
-4. **Improved Rate Limiting** - 2 second delays between authors (reduced IP ban risk)
-5. **Data Consolidation** - Partial data from previous runs automatically loaded and merged
-6. **Better Error Handling** - Specific timeout/connection error handling with backoff
-
----
 
 ## 🚀 Running the Pipeline
 
